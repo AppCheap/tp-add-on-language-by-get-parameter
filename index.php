@@ -193,6 +193,7 @@ function trp_gp_form_inputs( $html, $trp_language, $language_url_slug ){
 }
 add_filter( 'trp_form_inputs', 'trp_gp_form_inputs', 10, 3 );
 
+add_filter('app_builder_prepare_settings_data', 'trp_prepare_template_object', 100, 1);
 // product data
 add_filter( 'app_builder_prepare_product_object', 'trp_prepare_product_object', 100, 3);
 
@@ -207,6 +208,44 @@ add_filter( 'wpml_translate_single_string', 'trp_prepare_product_attribute_text'
 
 // post data
 add_filter( 'app_builder_prepare_post_object', 'trp_prepare_post_object', 100, 1);
+
+function trp_prepare_template_object($data) {
+	$trp_obj = TRP_Translate_Press::get_trp_instance();
+    $settings_obj = $trp_obj->get_component('settings');
+    $lang_obj = $trp_obj->get_component('languages');
+
+    $published_lang = $settings_obj->get_setting('publish-languages');
+	$default_lang = $settings_obj->get_setting('default-language');
+
+
+    $slugs = $settings_obj->get_setting('url-slugs');
+
+	$iso_lang = $lang_obj->get_iso_codes($published_lang);
+    $name_translate = $lang_obj->get_language_names($published_lang, 'english_name');
+    $name_native = $lang_obj->get_language_names($published_lang, 'native_name');
+
+	$languages = [];
+	if (isset( $published_lang ) ) {
+		foreach ( $published_lang as $value ) {
+			$key = $slugs[$value];
+			$languages[$key] = array(
+				"code"              => $key,
+				"native_name"       => $name_native[$value],
+				"default_locale"    => $value,
+				"translated_name"   => $name_translate[$value],
+				"language_code"     => $iso_lang[$value],
+			);
+			if ($value == $default_lang) {
+				$default_lang = $key;
+			}
+		}
+	}
+	
+	$data['languages'] = $languages;
+	$data['language'] = $default_lang;
+
+	return $data;
+}
 
 function trp_prepare_product_object( $data, $post, $request) {
     $data['name'] = trp_translate($data['name'], null , false);
