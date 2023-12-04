@@ -32,6 +32,22 @@ if ( ! defined( 'WPINC' ) ) {
 define( 'TRP_GP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'TRP_GP_PLUGIN_VERSION', '1.0.1' );
 
+function is_rest() {
+	if (defined('REST_REQUEST') && REST_REQUEST // (#1)
+			|| isset($_GET['rest_route']) // (#2)
+					&& strpos( $_GET['rest_route'] , '/', 0 ) === 0)
+			return true;
+
+	// (#3)
+	global $wp_rewrite;
+	if ($wp_rewrite === null) $wp_rewrite = new WP_Rewrite();
+		
+	// (#4)
+	$rest_url = wp_parse_url( trailingslashit( rest_url( ) ) );
+	$current_url = wp_parse_url( add_query_arg( array( ) ) );
+	return strpos( $current_url['path'] ?? '/', $rest_url['path'], 0 ) === 0;
+}
+
 function trp_gp_is_tp_active() {
 // If TP is not active, do nothing
 	if ( class_exists( 'TRP_Translate_Press' ) ) {
@@ -62,13 +78,16 @@ function trp_gp_get_parameter_name(){
  * @return string
  */
 function trp_gp_get_lang_from_get( $lang, $url ){
-	
-	$lang_parameter = trp_gp_get_parameter_name();
-	parse_str(parse_url( $url, PHP_URL_QUERY), $get );
-	if ( isset ( $get[ $lang_parameter ] ) && $get[ $lang_parameter ] != '' ){
-		$lang = sanitize_text_field( trim( $get[ $lang_parameter ], '/' ) );
-	}else{
-		$lang = null;
+	if (is_rest()) {
+		$lang_parameter = trp_gp_get_parameter_name();
+		parse_str(parse_url( $url, PHP_URL_QUERY), $get );
+		if ( isset ( $get[ $lang_parameter ] ) && $get[ $lang_parameter ] != '' ){
+			$lang = sanitize_text_field( trim( $get[ $lang_parameter ], '/' ) );
+		}else{
+			$lang = null;
+		}
+
+		return $lang;
 	}
 
 	return $lang;
@@ -80,69 +99,18 @@ add_filter( 'trp_get_lang_from_url_string', 'trp_gp_get_lang_from_get', 10, 2 );
  * Only active when TP ADL Add-on is active.
  */
 function trp_gp_cookie_adding(){
-	if ( ! trp_gp_is_tp_active() ){
-		return;
+	if (is_rest()) {
+		if ( ! trp_gp_is_tp_active() ){
+			return;
+		}
+	
+		// dependent on TP Add-on Automatic Detection Language
+		wp_enqueue_script( 'trp-gp-language-cookie', TRP_GP_PLUGIN_URL . 'assets/js/trp-gp-language-cookie.js', array( 'jquery', 'trp-language-cookie' ), TRP_GP_PLUGIN_VERSION );
+		wp_localize_script( 'trp-gp-language-cookie', 'trp_gp_language_cookie_data', array( 'lang_parameter' => trp_gp_get_parameter_name() ) );
 	}
-
-	// dependent on TP Add-on Automatic Detection Language
-	wp_enqueue_script( 'trp-gp-language-cookie', TRP_GP_PLUGIN_URL . 'assets/js/trp-gp-language-cookie.js', array( 'jquery', 'trp-language-cookie' ), TRP_GP_PLUGIN_VERSION );
-	wp_localize_script( 'trp-gp-language-cookie', 'trp_gp_language_cookie_data', array( 'lang_parameter' => trp_gp_get_parameter_name() ) );
+	
 }
 add_action( 'wp_enqueue_scripts', 'trp_gp_cookie_adding' );
-
-/**
- * Returns url encoded with the language code given.
- *
- * Used in TRP_Url_Converter method get_url_for_language()
- *
- * @param $new_url
- * @param $url
- * @param $language
- * @param $abs_home
- * @param $current_lang_root
- * @param $new_language_root
- *
- * @return string
- */
-function trp_gp_get_url_for_language( $new_url, $url, $language, $abs_home, $current_lang_root, $new_language_root ){
-	return trp_gp_add_language_param_to_link( $url, $language );
-}
-add_filter( 'trp_get_url_for_language', 'trp_gp_get_url_for_language', 10, 6 );
-
-/**
- * Returns url encoded with the language given.
- *
- * Used in TRP_Url_Converter method add_language_to_home_url()
- *
- * @param $new_url
- * @param $abs_home
- * @param $language_code
- * @param $path
- * @param $old_url
- *
- * @return string
- */
-function trp_gp_add_custom_query_var( $new_url, $abs_home, $language_code, $path, $old_url ){
-	return trp_gp_add_language_param_to_link( $old_url, $language_code );
-}
-add_filter( 'trp_home_url', 'trp_gp_add_custom_query_var', 10, 5 );
-
-/**
- * Returns url encoded with the current language.
- *
- * @param $permalink
- *
- * @return string
- */
-function trp_gp_correct_link( $permalink ){
-	return trp_gp_add_language_param_to_link( $permalink );
-}
-add_filter( 'post_link', 'trp_gp_correct_link', 1, 1 );
-add_filter( 'page_link', 'trp_gp_correct_link', 1, 1 );
-add_filter( 'post_type_link', 'trp_gp_correct_link', 1, 1 );
-add_filter( 'get_canonical_url', 'trp_gp_correct_link', 1, 1 );
-add_filter( 'get_comment_link', 'trp_gp_correct_link', 1, 1 );
-
 
 /**
  * Encode the given url to contain GET parameter for language.
@@ -177,21 +145,6 @@ function trp_gp_add_language_param_to_link( $link, $language_code = null ){
 	}
 	return $link;
 }
-
-/**
- * Adds a hidden input to forms, in order to keep the language GET parameter.
- *
- * @param $html
- * @param $trp_language
- * @param $language_url_slug
- *
- * @return string
- */
-function trp_gp_form_inputs( $html, $trp_language, $language_url_slug ){
-	$html .= '<input type="hidden" name="' . trp_gp_get_parameter_name() . '" value="'. $language_url_slug .'"/>';
-	return $html;
-}
-add_filter( 'trp_form_inputs', 'trp_gp_form_inputs', 10, 3 );
 
 add_filter('app_builder_prepare_settings_data', 'trp_prepare_template_object', 100, 1);
 // product data
@@ -298,6 +251,7 @@ function trp_prepare_product_attribute_text( $text) {
 }
 
 function trp_prepare_post_object( $data ) {
+
     $data['post_title'] = trp_translate($data['post_title'], null , false);
 
 	$categories = [];
