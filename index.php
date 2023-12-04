@@ -163,6 +163,10 @@ add_filter( 'wpml_translate_single_string', 'trp_prepare_product_attribute_text'
 add_filter( 'app_builder_prepare_post_object', 'trp_prepare_post_object', 100, 1);
 
 function trp_prepare_template_object($data) {
+	if ( ! trp_gp_is_tp_active() ){
+		return $data;
+	}
+
 	$trp_obj = TRP_Translate_Press::get_trp_instance();
     $settings_obj = $trp_obj->get_component('settings');
     $lang_obj = $trp_obj->get_component('languages');
@@ -201,6 +205,10 @@ function trp_prepare_template_object($data) {
 }
 
 function trp_prepare_product_object( $data, $post, $request) {
+	if ( ! trp_gp_is_tp_active() ){
+		return $data;
+	}
+
     $data['name'] = trp_translate($data['name'], null , false);
     $data['sku'] = trp_translate($data['sku'], null , false);
     $data['button_text'] = trp_translate($data['button_text'], null , false);
@@ -233,25 +241,39 @@ function trp_prepare_product_object( $data, $post, $request) {
 }
 
 function trp_prepare_product_category_name( $name) {
+	if ( ! trp_gp_is_tp_active() ){
+		return $name;
+	}
     return trp_translate($name, null , false);
 }
 
 function trp_prepare_product_option_object( $term) {
+	if ( ! trp_gp_is_tp_active() ){
+		return $tern;
+	}
 	$term->name = trp_translate($term->name, null , false);
     return $term;
 }
 
 function trp_prepare_product_attribute_object( $response) {
+	if ( ! trp_gp_is_tp_active() ){
+		return $response;
+	}
 	$response->data['name'] = trp_translate($response->data['name'], null , false);
     return $response;
 }
 
 function trp_prepare_product_attribute_text( $text) {
+	if ( ! trp_gp_is_tp_active() ){
+		return $text;
+	}
     return trp_translate($text, null , false);
 }
 
 function trp_prepare_post_object( $data ) {
-
+	if ( ! trp_gp_is_tp_active() ){
+		return $data;
+	}
     $data['post_title'] = trp_translate($data['post_title'], null , false);
 
 	$categories = [];
